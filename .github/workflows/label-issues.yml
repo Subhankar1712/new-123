@@ -12,32 +12,15 @@ jobs:
 
     steps:
     - name: Check Issue Content
-      id: issue-check
-      uses: actions/github-script@v6
+      uses: actions/checkout@v2
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
       with:
-        script: |
-          const keywords = ['bug', 'feature', 'enhancement']; // Add your keywords here
-          const issue = github.context.payload.issue;
-          const title = issue.title.toLowerCase();
-          const body = issue.body.toLowerCase();
-          let labelsToAdd = [];
+        python-version: 3.x
 
-          for (const keyword of keywords) {
-            if (title.includes(keyword) || body.includes(keyword)) {
-              labelsToAdd.push(keyword);
-            }
-          }
-
-          console.log(`Labels to add: ${labelsToAdd.join(', ')}`);
-          console.log(`Current labels: ${issue.labels.map(label => label.name).join(', ')}`);
-          return labelsToAdd;
-    
-    - name: Add Labels
-      if: steps.issue-check.outputs != '[]'
+    - name: Label Issues
       run: |
-        echo "::set-output name=labels::${{ steps.issue-check.outputs }}"
-        IFS=',' read -ra labels <<< "${{ steps.issue-check.outputs }}"
-        for label in "${labels[@]}"; do
-          echo "Adding label: $label"
-          gh issue add-label ${{ github.event.issue.number }} $label
-        done
+        python label_issues.py
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
