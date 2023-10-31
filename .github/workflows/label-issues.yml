@@ -1,46 +1,43 @@
-name: Issue Labeler
+name: Label Issues
 
 on:
   issues:
     types:
       - opened
+      - edited
 
 jobs:
-  label-issues:
+  label:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Install Dependencies
-        run: npm install
-      - name: Label Issues
-      - name: Check Issue Content
-        id: check-issue-content
-        run: |
-          content=$(jq -r '.issue.body' $GITHUB_EVENT_PATH)
-          if [[ $content =~ "keyword1" ]]; then
-            echo "::set-output name=labels::bug"
-          elif [[ $content =~ "keyword2" ]]; then
-            echo "::set-output name=labels::feature"
-          else
-            echo "::set-output name=labels::"
-          fi
+    - name: Check Issue Content
+      id: issue-check
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const keywords = ['bug', 'feature', 'enhancement']; // Add your keywords here
+          const issue = github.context.payload.issue;
+          const title = issue.title.toLowerCase();
+          const body = issue.body.toLowerCase();
+          let labelsToAdd = [];
 
-      - name: Add Labels
-        if: steps.check-issue-content.outputs.labels != ''
-        run: |
-          labels=${{ steps.check-issue-content.outputs.labels }}
-          IFS=',' read -ra labelArray <<< "$labels"
-          for label in "${labelArray[@]}"; do
-            echo "Adding label: $label"
-            gh issue add-label ${{ github.event.issue.number }} "$label"
-          done
+          for (const keyword of keywords) {
+            if (title.includes(keyword) || body.includes(keyword)) {
+              labelsToAdd.push(keyword);
+            }
+          }
 
-      - name: Comment on Issue
-        if: steps.check-issue-content.outputs.labels != ''
-        run: |
-          labels=${{ steps.check-issue-content.outputs.labels }}
-          echo "Label(s) added: $labels"
-          echo "Thank you for reporting the issue! We have labeled it accordingly."
-          gh issue comment ${{ github.event.issue.number }} "Label(s) added: $labels\n\nThank you for reporting the issue! We have labeled it accordingly."
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          console.log(`Labels to add: ${labelsToAdd.join(', ')}`);
+          console.log(`Current labels: ${issue.labels.map(label => label.name).join(', ')}`);
+          return labelsToAdd;
+    
+    - name: Add Labels
+      if: steps.issue-check.outputs != '[]'
+      run: |
+        echo "::set-output name=labels::${{ steps.issue-check.outputs }}"
+        IFS=',' read -ra labels <<< "${{ steps.issue-check.outputs }}"
+        for label in "${labels[@]}"; do
+          echo "Adding label: $label"
+          gh issue add-label ${{ github.event.issue.number }} $label
+        done
